@@ -5,13 +5,17 @@ const User = mongoose.model("User", {
     unique: true,
     type: String,
   },
-  name: {
-    require: true,
-    type: String,
+  rooms: {
+    type: Array,
+    room: { type: mongoose.Schema.Types.ObjectId, ref: "Room" },
   },
   account: {
     username: String,
     description: String,
+    name: {
+      require: true,
+      type: String,
+    },
   },
   token: String,
   salt: String,

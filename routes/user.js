@@ -16,10 +16,10 @@ router.post("/user/sign_up", async (req, res) => {
         const hash = SHA256(salt + password).toString(encBase64);
         const newUser = new User({
           email: email,
-          name: name,
           account: {
             username: username,
             description: description,
+            name: name,
           },
           token: uid2(64),
           salt: salt,
@@ -32,6 +32,7 @@ router.post("/user/sign_up", async (req, res) => {
           email: newUser.email,
           username: newUser.account.username,
           description: newUser.account.description,
+          name: newUser.account.name,
         });
       } else {
         res.status(400).json({ error: "Missing parameters" });
@@ -58,7 +59,7 @@ router.post("/user/log_in", async (req, res) => {
           email: checkUser.email,
           username: checkUser.account.username,
           description: checkUser.account.description,
-          name: checkUser.name,
+          name: checkUser.account.name,
         });
       } else {
         res.status(401).json({ error: "Bad email or password" });

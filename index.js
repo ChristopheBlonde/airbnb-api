@@ -13,7 +13,9 @@ mongoose.connect(process.env.MONGODB_URI, {
 });
 
 const userRoutes = require("./routes/user");
+const userRooms = require("./routes/room");
 app.use(userRoutes);
+app.use(userRooms);
 
 app.all("*", (req, res) => {
   res.status(404).json({ message: "Page not found" });

@@ -44,4 +44,30 @@ router.post("/user/sign_up", async (req, res) => {
   }
 });
 
+router.post("/user/log_in", async (req, res) => {
+  try {
+    const checkUser = await User.findOne({ email: req.fields.email });
+    if (checkUser) {
+      const newHash = SHA256(checkUser.salt + req.fields.password).toString(
+        encBase64
+      );
+      if (newHash === checkUser.hash) {
+        res.status(200).json({
+          _id: checkUser._id,
+          token: checkUser.token,
+          email: checkUser.email,
+          username: checkUser.account.username,
+          description: checkUser.account.description,
+          name: checkUser.name,
+        });
+      } else {
+        res.status(401).json({ error: "Bad email or password" });
+      }
+    } else {
+      res.status(400).json({ error: "Unauthorizated" });
+    }
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
 module.exports = router;

@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const isAuthenticated = require("../middlewares/authorization");
 const isAuthorizedToModified = require("../middlewares/authorizedToModified");
+const cloudinary = require("cloudinary").v2;
 
 const User = require("../models/User");
 const Room = require("../models/Room");
@@ -11,7 +12,7 @@ router.post("/room/publish", isAuthenticated, async (req, res) => {
     const { title, description, price, location } = req.fields;
     if (title && description && price && location.lat && location.lng) {
       const newRoom = new Room({
-        photos: [],
+        picture: [],
         title: title,
         description: description,
         price: price,
@@ -33,7 +34,7 @@ router.post("/room/publish", isAuthenticated, async (req, res) => {
 
 router.get("/rooms", async (req, res) => {
   try {
-    const offersRoom = await Room.find().select("title price photos location");
+    const offersRoom = await Room.find().select("title price picture location");
     res.status(200).json(offersRoom);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -54,7 +55,7 @@ router.get("/rooms/:id", async (req, res) => {
 
 router.put("/room/update/:id", isAuthorizedToModified, async (req, res) => {
   try {
-    const roomToUpDate = await Room.findById({ _id: req.params.id });
+    const roomToUpDate = await req.room;
     if (req.fields.title) {
       roomToUpDate.title = req.fields.title;
     }
@@ -74,10 +75,73 @@ router.put("/room/update/:id", isAuthorizedToModified, async (req, res) => {
   }
 });
 
+router.post(
+  "/room/upload_picture/:id",
+  isAuthorizedToModified,
+  async (req, res) => {
+    try {
+      const user = await req.user;
+      const room = await req.room;
+      const picturesKeys = Object.keys(req.files);
+      if (room.picture.length + picturesKeys.length <= 5) {
+        const pictures = room.picture.length;
+        picturesKeys.forEach(async (pictureKey) => {
+          const file = req.files[pictureKey];
+          const upLoad = await cloudinary.uploader.upload(file.path, {
+            folder: `airbnb/roomPictures/${user._id} `,
+          });
+
+          room.picture.push({
+            url: upLoad.secure_url,
+            picture_id: upLoad.public_id,
+          });
+
+          if (room.picture.length === picturesKeys.length + pictures) {
+            room.save();
+            return res.status(200).json(room);
+          }
+        });
+      } else {
+        res.status(400).json({ error: "You must have 5 pictures max" });
+      }
+    } catch (error) {
+      res.status(400).json({ message: error.message });
+    }
+  }
+);
+
+router.delete(
+  "/room/delete_picture/:id",
+  isAuthorizedToModified,
+  async (req, res) => {
+    try {
+      let room = await req.room;
+      let i = 0;
+      room.picture.forEach(async (value, index) => {
+        i++;
+        if (value.picture_id === req.fields.picture_id) {
+          await cloudinary.uploader.destroy(req.fields.picture_id);
+          room.picture.splice(index, 1);
+          room.markModified("picture");
+          room.save();
+          res.status(200).json(room);
+        } else if (
+          room.picture.length === i &&
+          room.picture[index].picture_id !== req.fields.picture_id
+        ) {
+          res.status(400).json({ error: "Picture not found" });
+        }
+      });
+    } catch (error) {
+      res.status(400).json({ message: error.message });
+    }
+  }
+);
+
 router.delete("/room/delete/:id", isAuthorizedToModified, async (req, res) => {
   try {
     const roomToDelete = await Room.findByIdAndDelete(req.params.id);
-    const userToDeleteRoom = await User.findOne(roomToDelete.user);
+    const userToDeleteRoom = await req.user;
     const indexRoom = userToDeleteRoom.rooms
       .toString()
       .indexOf({ room: req.params.id });
@@ -85,7 +149,7 @@ router.delete("/room/delete/:id", isAuthorizedToModified, async (req, res) => {
 
     userToDeleteRoom.markModified("rooms");
     await userToDeleteRoom.save();
-    res.status(200).json(userToDeleteRoom);
+    res.status(200).json({ message: "Room deleted" });
   } catch (error) {
     res.status(400).json({ message: error.message });
   }

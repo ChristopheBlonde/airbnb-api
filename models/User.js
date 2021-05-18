@@ -10,6 +10,7 @@ const User = mongoose.model("User", {
     room: { type: mongoose.Schema.Types.ObjectId, ref: "Room" },
   },
   account: {
+    photo: Object,
     username: String,
     description: String,
     name: {

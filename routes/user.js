@@ -3,6 +3,8 @@ const router = express.Router();
 const uid2 = require("uid2");
 const SHA256 = require("crypto-js/sha256");
 const encBase64 = require("crypto-js/enc-base64");
+const cloudinary = require("cloudinary").v2;
+const isAuthenticated = require("../middlewares/authorization");
 
 const User = require("../models/User");
 
@@ -45,6 +47,46 @@ router.post("/user/sign_up", async (req, res) => {
   }
 });
 
+router.post("/user/upload_picture/:id", isAuthenticated, async (req, res) => {
+  try {
+    const avatarUpLoad = await cloudinary.uploader.upload(
+      req.files.picture.path,
+      { folder: `/airbnb/usersAvatar/${req.user._id}` }
+    );
+    const user = await req.user;
+    user.account.photo = {
+      url: avatarUpLoad.secure_url,
+      picture_id: avatarUpLoad.public_id,
+    };
+    user.save();
+    res.status(200).json({
+      account: user.account,
+      _id: user._id,
+      email: user.email,
+      rooms: user.rooms,
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+router.delete("/user/delete_picture/:id", isAuthenticated, async (req, res) => {
+  try {
+    const userUpDate = await req.user;
+    await cloudinary.uploader.destroy(userUpDate.account.photo.picture_id);
+    await cloudinary.api.delete_folder("airbnb/usersAvatar/" + req.params.id);
+    userUpDate.account.photo = null;
+    await userUpDate.save();
+    res.status(200).json({
+      _id: userUpDate._id,
+      account: userUpDate.account,
+      email: userUpDate.email,
+      rooms: userUpDate.rooms,
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
 router.post("/user/log_in", async (req, res) => {
   try {
     const checkUser = await User.findOne({ email: req.fields.email });

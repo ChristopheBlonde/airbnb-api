@@ -4,7 +4,9 @@ const Room = mongoose.model("Room", {
   title: String,
   description: String,
   price: Number,
-  photos: Object,
+  picture: {
+    type: Array,
+  },
   location: {
     type: Array,
     lat: Number,

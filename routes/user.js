@@ -5,8 +5,10 @@ const SHA256 = require("crypto-js/sha256");
 const encBase64 = require("crypto-js/enc-base64");
 const cloudinary = require("cloudinary").v2;
 const isAuthenticated = require("../middlewares/authorization");
+const mongoose = require("mongoose");
 
 const User = require("../models/User");
+const Room = require("../models/Room");
 
 router.post("/user/sign_up", async (req, res) => {
   try {
@@ -87,6 +89,7 @@ router.delete("/user/delete_picture/:id", isAuthenticated, async (req, res) => {
     res.status(400).json({ message: error.message });
   }
 });
+
 router.post("/user/log_in", async (req, res) => {
   try {
     const checkUser = await User.findOne({ email: req.fields.email });
@@ -108,6 +111,40 @@ router.post("/user/log_in", async (req, res) => {
       }
     } else {
       res.status(400).json({ error: "Unauthorizated" });
+    }
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+router.get("/user/:id", async (req, res) => {
+  try {
+    if (await mongoose.Types.ObjectId.isValid(req.params.id)) {
+      const watchUser = await User.findById({ _id: req.params.id }).select(
+        "_id account rooms"
+      );
+      res.status(200).json(watchUser);
+    } else {
+      res.status(400).json({ message: "Invalid id" });
+    }
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+router.get("/user/rooms/:id", async (req, res) => {
+  try {
+    if (await mongoose.Types.ObjectId.isValid(req.params.id)) {
+      const rooms = await User.findById({ _id: req.params.id }).select("rooms");
+      const detailsRoom = [];
+      const tab = rooms.rooms;
+      for (let i = 0; i < tab.length; i++) {
+        const details = await Room.findById(tab[i].room);
+        detailsRoom.push(details);
+      }
+      res.status(200).json(detailsRoom);
+    } else {
+      res.status(400).json({ message: "Invalid id" });
     }
   } catch (error) {
     res.status(400).json({ message: error.message });

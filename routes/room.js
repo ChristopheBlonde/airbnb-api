@@ -34,8 +34,43 @@ router.post("/room/publish", isAuthenticated, async (req, res) => {
 
 router.get("/rooms", async (req, res) => {
   try {
-    const offersRoom = await Room.find().select("title price picture location");
-    res.status(200).json(offersRoom);
+    const filters = {};
+    if (req.query.title) {
+      filters.title = new RegExp(req.query.title, "i");
+    }
+    if (req.query.priceMin) {
+      filters.price = { $gte: Number(req.query.priceMin) };
+    }
+    if (req.query.priceMax) {
+      if (req.query.priceMin) {
+        filters.price.$lte = Number(req.query.priceMax);
+      } else {
+        filters.price = { $lte: Number(req.query.priceMax) };
+      }
+    }
+    const sort = {};
+    if (req.query.sort) {
+      if (req.query.sort === "price-asc") {
+        sort.price = "asc";
+      } else {
+        sort.price = "desc";
+      }
+    }
+    let limit = 10;
+    let skip = 0;
+    if (req.query.limit) {
+      limit = await Number(req.query.limit);
+    }
+    if (req.query.page && req.query.page > 0) {
+      skip = limit * req.query.page - limit;
+    }
+    const offersRoom = await Room.find(filters)
+      .select("title price picture location")
+      .sort(sort)
+      .skip(skip)
+      .limit(limit);
+    const count = await Room.find(filters).countDocuments();
+    res.status(200).json({ count: count, rooms: offersRoom });
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
@@ -154,4 +189,5 @@ router.delete("/room/delete/:id", isAuthorizedToModified, async (req, res) => {
     res.status(400).json({ message: error.message });
   }
 });
+
 module.exports = router;

@@ -6,6 +6,10 @@ const encBase64 = require("crypto-js/enc-base64");
 const cloudinary = require("cloudinary").v2;
 const isAuthenticated = require("../middlewares/authorization");
 const mongoose = require("mongoose");
+const mailgun = require("mailgun-js")({
+  apiKey: process.env.MAILGUN_API_KEY,
+  domain: process.env.MAILGUN_DOMAIN,
+});
 
 const User = require("../models/User");
 const Room = require("../models/Room");
@@ -145,6 +149,54 @@ router.get("/user/rooms/:id", async (req, res) => {
       res.status(200).json(detailsRoom);
     } else {
       res.status(400).json({ message: "Invalid id" });
+    }
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+router.put("/user/update", isAuthenticated, async (req, res) => {
+  try {
+    const updateUser = await req.user;
+    if (
+      req.fields.name ||
+      req.fields.username ||
+      req.fields.email ||
+      req.fields.description
+    ) {
+      const checkUserName = await User.findOne({
+        "account.username": new RegExp(req.fields.username, "i"),
+      });
+      const checkEmail = await User.findOne({ email: req.fields.email });
+      if (!checkUserName && !checkEmail) {
+        if (req.fields.username) {
+          updateUser.account.username = req.fields.username;
+        }
+        if (req.fields.email) {
+          updateUser.email = req.fields.email;
+        }
+        if (req.fields.name) {
+          updateUser.account.name = req.fields.name;
+        }
+        if (req.fields.description) {
+          updateUser.account.description = req.fields.description;
+        }
+        await updateUser.save();
+        res.status(200).json({
+          _id: updateUser._id,
+          email: updateUser.email,
+          account: updateUser.account,
+          rooms: updateUser.rooms,
+        });
+      } else if (checkUserName && !checkEmail) {
+        res.status(400).json({ error: "Username already used" });
+      } else if (checkEmail && !checkUserName) {
+        res.status(400).json({ error: "Email already used" });
+      } else if (checkUserName && checkEmail) {
+        res.status(400).json({ error: "Email and Username already used" });
+      }
+    } else {
+      res.status(400).json({ message: "One parameter must be changed." });
     }
   } catch (error) {
     res.status(400).json({ message: error.message });

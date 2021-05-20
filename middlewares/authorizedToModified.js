@@ -32,7 +32,7 @@ const isAuthorizedToModified = async (req, res, next) => {
       res.status(400).json({ error: "You must be connect to update a room." });
     }
   } else {
-    res.status(400).json({ error: "Bad id" });
+    res.status(400).json({ error: "Bad id form" });
   }
 };
 

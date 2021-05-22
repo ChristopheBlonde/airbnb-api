@@ -6,7 +6,8 @@ const encBase64 = require("crypto-js/enc-base64");
 const cloudinary = require("cloudinary").v2;
 const isAuthenticated = require("../middlewares/authorization");
 const mongoose = require("mongoose");
-const mailgun = require("mailgun-js")({
+const mailgun = require("mailgun-js");
+const mg = mailgun({
   apiKey: process.env.MAILGUN_API_KEY,
   domain: process.env.MAILGUN_DOMAIN,
 });
@@ -197,6 +198,49 @@ router.put("/user/update", isAuthenticated, async (req, res) => {
       }
     } else {
       res.status(400).json({ message: "One parameter must be changed." });
+    }
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+router.put("/user/update_password", isAuthenticated, async (req, res) => {
+  try {
+    const user = await req.user;
+    const previousPassword = SHA256(
+      user.salt + req.fields.previousPassword
+    ).toString(encBase64);
+    const newPassword = SHA256(user.salt + req.fields.newPassword).toString(
+      encBase64
+    );
+    if (previousPassword === user.hash) {
+      if (newPassword !== user.hash) {
+        const newSalt = uid2(16);
+        const newToken = uid2(64);
+        const newHash = SHA256(newSalt + req.fields.newPassword).toString(
+          encBase64
+        );
+        user.salt = newSalt;
+        user.token = newToken;
+        user.hash = newHash;
+        await user.save();
+
+        const dataMail = {
+          from: "no-reply@airbnb-api.com",
+          to: user.email,
+          subject: "Airbnb-api password",
+          text: "Your password successfully changed",
+        };
+
+        await mg.messages().send(dataMail, (error, body) => {
+          console.log(body);
+          res.status(200).json({ message: "password changed" });
+        });
+      } else {
+        res.status(400).json({ error: "Password must be different" });
+      }
+    } else {
+      res.status(400).json({ error: "password false" });
     }
   } catch (error) {
     res.status(400).json({ message: error.message });

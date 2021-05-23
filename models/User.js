@@ -18,6 +18,8 @@ const User = mongoose.model("User", {
       type: String,
     },
   },
+  temporaryToken: String,
+  timestamp: Number,
   token: String,
   salt: String,
   hash: String,

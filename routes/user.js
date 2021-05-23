@@ -29,6 +29,7 @@ router.post("/user/sign_up", async (req, res) => {
             username: username,
             description: description,
             name: name,
+            photo: null,
           },
           token: uid2(64),
           salt: salt,
@@ -56,22 +57,32 @@ router.post("/user/sign_up", async (req, res) => {
 
 router.post("/user/upload_picture/:id", isAuthenticated, async (req, res) => {
   try {
-    const avatarUpLoad = await cloudinary.uploader.upload(
-      req.files.picture.path,
-      { folder: `/airbnb/usersAvatar/${req.user._id}` }
-    );
     const user = await req.user;
-    user.account.photo = {
-      url: avatarUpLoad.secure_url,
-      picture_id: avatarUpLoad.public_id,
-    };
-    user.save();
-    res.status(200).json({
-      account: user.account,
-      _id: user._id,
-      email: user.email,
-      rooms: user.rooms,
-    });
+    if (user._id.toString() === req.params.id) {
+      if (user.account.photo === null) {
+        const avatarUpLoad = await cloudinary.uploader.upload(
+          req.files.picture.path,
+          { folder: `/airbnb/usersAvatar/${req.user._id}` }
+        );
+        user.account.photo = {
+          url: avatarUpLoad.secure_url,
+          picture_id: avatarUpLoad.public_id,
+        };
+        await user.save();
+        res.status(200).json({
+          account: user.account,
+          _id: user._id,
+          email: user.email,
+          rooms: user.rooms,
+        });
+      } else {
+        res.status(400).json({
+          message: "You must delete picture befor upload a new one. ",
+        });
+      }
+    } else {
+      res.status(400).json({ message: "bad user." });
+    }
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
@@ -80,16 +91,26 @@ router.post("/user/upload_picture/:id", isAuthenticated, async (req, res) => {
 router.delete("/user/delete_picture/:id", isAuthenticated, async (req, res) => {
   try {
     const userUpDate = await req.user;
-    await cloudinary.uploader.destroy(userUpDate.account.photo.picture_id);
-    await cloudinary.api.delete_folder("airbnb/usersAvatar/" + req.params.id);
-    userUpDate.account.photo = null;
-    await userUpDate.save();
-    res.status(200).json({
-      _id: userUpDate._id,
-      account: userUpDate.account,
-      email: userUpDate.email,
-      rooms: userUpDate.rooms,
-    });
+    if (userUpDate._id.toString() === req.params.id) {
+      if (userUpDate.account.photo !== null) {
+        await cloudinary.uploader.destroy(userUpDate.account.photo.picture_id);
+        await cloudinary.api.delete_folder(
+          "airbnb/usersAvatar/" + req.params.id
+        );
+        userUpDate.account.photo = null;
+        await userUpDate.save();
+        res.status(200).json({
+          _id: userUpDate._id,
+          account: userUpDate.account,
+          email: userUpDate.email,
+          rooms: userUpDate.rooms,
+        });
+      } else {
+        res.status(400).json({ message: "Picture already deleted" });
+      }
+    } else {
+      res.status(400).json({ message: "bad user." });
+    }
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
@@ -242,6 +263,91 @@ router.put("/user/update_password", isAuthenticated, async (req, res) => {
     } else {
       res.status(400).json({ error: "password false" });
     }
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+router.post("/user/recover_password", async (req, res) => {
+  try {
+    const user = await User.findOne({ email: req.fields.email });
+    if (user) {
+      const tempToken = uid2(64);
+      const mailSend = {
+        to: user.email,
+        from: "noreply@airbnb-api.com",
+        subject: "recover password",
+        text: `Link to /user/reset_password ${tempToken}`,
+      };
+      mg.messages().send(mailSend, () => {
+        console.log("sending ok");
+      });
+      const timeSet = Date.now();
+      user.temporaryToken = tempToken;
+      user.timestamp = timeSet;
+      await user.save();
+      res.status(200).json({ message: "A link has been sent to the user." });
+    } else {
+      res.status(400).json({ message: "Email not found." });
+    }
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+router.post("/user/reset_password", async (req, res) => {
+  try {
+    const user = await User.findOne({
+      temporaryToken: req.fields.passwordToken,
+    });
+    const time = Date.now();
+    if (15 * 60000 > time - user.timestamp) {
+      const newSalt = uid2(16);
+      const newHash = SHA256(newSalt + req.fields.password).toString(encBase64);
+      user.salt = newSalt;
+      user.hash = newHash;
+      await user.save();
+      res
+        .status(200)
+        .json({ _id: user._id, email: user.email, token: user.token });
+    } else {
+      res.status(400).json({ message: "Time exceed try again." });
+    }
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+router.delete("/user/delete/:id", isAuthenticated, async (req, res) => {
+  try {
+    user = await req.user;
+    if (user.account.photo !== null) {
+      await cloudinary.api.delete_resources_by_prefix(
+        "airbnb/usersAvatar/" + user._id
+      );
+      await cloudinary.api.delete_folder("airbnb/usersAvatar/" + user._id);
+    }
+    console.log(user.rooms[0]);
+    if (user.rooms[0] !== null) {
+      for (let i = 0; i < user.rooms.length; i++) {
+        const roomToDelete = await Room.findByIdAndDelete(user.rooms[i].room);
+        let deletedPicture = false;
+        console.log(roomToDelete);
+        if (roomToDelete.picture.length > 0) {
+          await cloudinary.api.delete_resources_by_prefix(
+            `airbnb/roomPictures/${user._id} `
+          );
+          deletedPicture = true;
+        }
+        if (deletedPicture === true) {
+          await cloudinary.api.delete_folder(
+            `airbnb/roomPictures/${user._id} `
+          );
+        }
+      }
+    }
+    await User.findByIdAndDelete(req.params.id);
+    res.status(200).json({ message: "User deleted" });
   } catch (error) {
     res.status(400).json({ message: error.message });
   }

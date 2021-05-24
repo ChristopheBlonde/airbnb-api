@@ -67,10 +67,51 @@ router.get("/rooms", async (req, res) => {
     const offersRoom = await Room.find(filters)
       .select("title price picture location")
       .sort(sort)
-      .skip(skip)
-      .limit(limit);
+      .skip(skip);
+    // .limit(limit);
     const count = await Room.find(filters).countDocuments();
-    res.status(200).json({ count: count, rooms: offersRoom });
+
+    // Fonction pour créer un nombre aléatoire
+    const random = (num) => {
+      const result = Math.floor(Math.random() * num + 1);
+      return result;
+    };
+    // Valeur de condition d'arrêt de la boucle qui servira au tirage aléatoire
+    const valueLimit = count * 5;
+    // Tableau vide pour recevoir les index des annonces
+    const arrNum = [];
+    // Tableau vide pour recevoir les annonces aléatoire
+    const arrAnnonce = [];
+    // Nombre d' annonces trouvées par Model.find()
+    // = offersRoom
+    // Nombre de resultats souhaités
+    // = limit
+    // Boucle pour tirer un nombre aléatoire qui correspond à l'index dans le tableau du resultat du Model.find()
+    let i = 0;
+    while (i < valueLimit) {
+      result = random(count);
+      let value = false;
+      // Boucle pour vérifier si l'index a déjà été tiré
+      for (let j = 0; j < arrNum.length + 1; j++) {
+        if (result === arrNum[j]) {
+          value = true;
+        }
+      }
+      // Push de l'index dans le tableau des index
+      if (value === false) {
+        if (arrNum.length < limit) arrNum.push(result);
+      }
+      i++;
+    }
+    // Tri des index pour garder l'ordre croissant ou décroissant des filtres
+    arrNum.sort((a, b) => {
+      return a - b;
+    });
+    // Push de l'annonce dans le nouveau tableau des annonces
+    for (let k = 0; k < arrNum.length; k++) {
+      arrAnnonce.push(offersRoom[arrNum[k] - 1]);
+    }
+    res.status(200).json({ count: count, rooms: arrAnnonce });
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
@@ -83,6 +124,20 @@ router.get("/rooms/:id", async (req, res) => {
       "account"
     );
     res.status(200).json(roomfind);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+router.get("/room/around", async (req, res) => {
+  try {
+    const roomAround = await Room.find({
+      location: {
+        $near: [req.query.latitude, req.query.longitude],
+        $maxDistance: 1,
+      },
+    });
+    res.status(200).json(roomAround);
   } catch (error) {
     res.status(400).json({ message: error.message });
   }

@@ -8,10 +8,10 @@ const Room = mongoose.model("Room", {
     type: Array,
   },
   location: {
-    type: Array,
-    lat: Number,
-    lng: Number,
+    type: [Number],
+    index: "2d",
   },
+
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
